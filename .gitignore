@@ -1,0 +1,3 @@
+# Secrets & données locales
+.env
+n8n_data/
