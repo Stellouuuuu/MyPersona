@@ -1,0 +1,648 @@
+{
+  "name": "Persona - Utilisateur & Securite",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        300
+      ],
+      "id": "9666e22c-4315-47d3-a210-c27996c96cd9",
+      "name": "When chat message received",
+      "webhookId": "21821179-6560-462f-a678-8daf96d079ae"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst sessionId = $json.sessionId;\nconst userMessage = ($json.chatInput || '').trim();\nconst msgLower = userMessage.toLowerCase();\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.sessions) staticData.sessions = {};\nif (!staticData.loginAttempts) staticData.loginAttempts = {};\n\nlet session = staticData.sessions[sessionId] || {\n  step: -1,\n  authenticated: false,\n  userId: null,\n  username: null,\n  sessionToken: null,\n  pendingField: null\n};\n\nlet response = '';\nlet action = 'none';\nlet actionData = {};\n\nfunction resetToMenu() {\n  session.step = session.authenticated ? -2 : -1;\n}\n\nfunction requireAuth() {\n  if (!session.authenticated || !session.sessionToken) {\n    response = 'Session expirée ou non connectée. Tape \"connexion\" pour te reconnecter.';\n    resetToMenu();\n    return false;\n  }\n  return true;\n}\n\nfunction cancelFlow() {\n  resetToMenu();\n  response = session.authenticated\n    ? 'Action annulée. Que veux-tu faire ? (profil / rgpd / déconnexion / aide)'\n    : 'Action annulée. Tape \"inscription\" ou \"connexion\".';\n}\n\nif (msgLower === 'annuler' || msgLower === 'cancel') {\n  cancelFlow();\n} else if (!session.authenticated) {\n  // ---- NON AUTHENTIFIÉ ----\n  if (session.step === -1) {\n    if (msgLower.includes('inscri') || msgLower.includes('créer') || msgLower.includes('creer')) {\n      session.step = 0;\n      response = 'Inscription Persona\\n\\nChoisis un nom d\\'utilisateur (3-20 caractères, lettres/chiffres/_).';\n    } else if (msgLower.includes('connect') || msgLower.includes('login')) {\n      session.step = 10;\n      response = 'Connexion\\n\\nQuel est ton nom d\\'utilisateur ?';\n    } else if (msgLower.includes('aide') || msgLower.includes('help')) {\n      response = 'Persona - Aide\\n\\n• \"inscription\" : créer un compte\\n• \"connexion\" : se connecter\\n• \"aide\" : cette aide\\n\\nAprès connexion : profil, rgpd, déconnexion.';\n    } else {\n      response = 'Bonjour ! Je suis Persona.\\n\\nTape \"inscription\" pour créer un compte ou \"connexion\" pour te connecter.';\n    }\n  } else if (session.step === 0) {\n    if (!/^[a-zA-Z0-9_]{3,20}$/.test(userMessage)) {\n      response = 'Nom invalide. Utilise 3-20 caractères (lettres, chiffres, underscore).';\n    } else {\n      session.username = userMessage;\n      session.step = 1;\n      response = `Parfait ${session.username} ! Choisis un mot de passe (min. 8 car., lettre + chiffre).`;\n    }\n  } else if (session.step === 1) {\n    if (userMessage.length < 8 || !/[A-Za-z]/.test(userMessage) || !/\\d/.test(userMessage)) {\n      response = 'Mot de passe trop faible. Min. 8 caractères avec au moins une lettre et un chiffre.';\n    } else {\n      session.password = userMessage;\n      session.step = 2;\n      response = 'Confirme ton mot de passe.';\n    }\n  } else if (session.step === 2) {\n    if (userMessage !== session.password) {\n      session.step = 1;\n      delete session.password;\n      response = 'Les mots de passe ne correspondent pas. Rechoisis un mot de passe.';\n    } else {\n      session.step = 3;\n      response = 'Quelle est ton adresse email ?';\n    }\n  } else if (session.step === 3) {\n    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(userMessage)) {\n      response = 'Email invalide. Exemple : prenom@domaine.com';\n    } else {\n      session.email = userMessage;\n      session.step = 4;\n      response = 'Quels sont tes centres d\\'intérêt ? (ex: IA, sport, économie)';\n    }\n  } else if (session.step === 4) {\n    if (userMessage.length < 2) {\n      response = 'Indique au moins un centre d\\'intérêt.';\n    } else {\n      session.interests = userMessage;\n      session.step = 5;\n      response = 'À quelle heure veux-tu recevoir ta newsletter ? (format HH:MM, ex: 08:00)';\n    }\n  } else if (session.step === 5) {\n    if (!/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(userMessage)) {\n      response = 'Heure invalide. Utilise le format HH:MM (ex: 08:00).';\n    } else {\n      session.schedule_time = userMessage;\n      session.step = 6;\n      response = 'Consentement RGPD\\n\\nPersona stocke ton email, tes intérêts et ton horaire pour t\\'envoyer une newsletter personnalisée. Tu peux te désinscrire ou supprimer tes données à tout moment.\\n\\nAcceptes-tu ? (oui/non)';\n    }\n  } else if (session.step === 6) {\n    if (['oui', 'yes', 'o', 'y'].includes(msgLower)) {\n      action = 'register';\n      actionData = {\n        username: session.username,\n        password: session.password,\n        email: session.email,\n        interests: session.interests,\n        schedule_time: session.schedule_time\n      };\n      response = 'Création de ton compte en cours...';\n      delete session.password;\n      session.step = -1;\n    } else if (['non', 'no', 'n'].includes(msgLower)) {\n      staticData.sessions[sessionId] = { step: -1, authenticated: false };\n      response = 'Inscription annulée sans stockage de données. Tu peux recommencer avec \"inscription\".';\n      session = staticData.sessions[sessionId];\n    } else {\n      response = 'Réponds \"oui\" ou \"non\" pour le consentement RGPD.';\n    }\n  } else if (session.step === 10) {\n    session.loginUsername = userMessage;\n    session.step = 11;\n    response = 'Quel est ton mot de passe ?';\n  } else if (session.step === 11) {\n    action = 'login';\n    actionData = { username: session.loginUsername, password: userMessage };\n    response = 'Vérification en cours...';\n    session.step = -1;\n    delete session.loginUsername;\n  }\n} else {\n  // ---- AUTHENTIFIÉ ----\n  if (session.step === -2) {\n    if (msgLower.includes('profil') || msgLower.includes('profile')) {\n      session.step = 20;\n      response = 'Mon profil\\n\\n1. Voir mon profil\\n2. Modifier email\\n3. Modifier intérêts\\n4. Modifier horaire\\n\\nTape le numéro ou \"annuler\".';\n    } else if (msgLower.includes('rgpd') || msgLower.includes('données') || msgLower.includes('donnees')) {\n      session.step = 30;\n      response = 'Gestion RGPD\\n\\n1. Voir mes données\\n2. Me désinscrire (newsletter)\\n3. Supprimer mon compte\\n\\nTape le numéro ou \"annuler\".';\n    } else if (msgLower.includes('déconnexion') || msgLower.includes('deconnexion') || msgLower.includes('logout')) {\n      action = 'logout';\n      actionData = { sessionToken: session.sessionToken };\n      session.authenticated = false;\n      session.sessionToken = null;\n      session.userId = null;\n      session.username = null;\n      session.step = -1;\n      response = 'Déconnexion en cours...';\n    } else if (msgLower.includes('aide') || msgLower.includes('help')) {\n      response = `Connecté en tant que ${session.username}.\\n\\n• profil : gérer tes infos\\n• rgpd : données personnelles\\n• déconnexion : fermer la session\\n• annuler : revenir au menu`;\n    } else {\n      response = `Bonjour ${session.username} !\\n\\nQue veux-tu faire ?\\n• profil\\n• rgpd\\n• déconnexion\\n• aide`;\n    }\n  } else if (session.step === 20) {\n    if (msgLower === '1' || msgLower.includes('voir')) {\n      action = 'profile_view';\n      actionData = { sessionToken: session.sessionToken };\n      session.step = -2;\n      response = 'Chargement de ton profil...';\n    } else if (msgLower === '2' || msgLower.includes('email')) {\n      session.step = 21;\n      session.pendingField = 'email';\n      response = 'Nouvelle adresse email ?';\n    } else if (msgLower === '3' || msgLower.includes('intérêt') || msgLower.includes('interet')) {\n      session.step = 21;\n      session.pendingField = 'interests';\n      response = 'Nouveaux centres d\\'intérêt ?';\n    } else if (msgLower === '4' || msgLower.includes('horaire') || msgLower.includes('heure')) {\n      session.step = 21;\n      session.pendingField = 'schedule_time';\n      response = 'Nouvel horaire ? (HH:MM)';\n    } else {\n      session.step = -2;\n      response = 'Retour au menu. Tape profil, rgpd ou déconnexion.';\n    }\n  } else if (session.step === 21) {\n    if (!requireAuth()) {\n      // response already set\n    } else if (session.pendingField === 'email') {\n      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(userMessage)) {\n        response = 'Email invalide.';\n      } else {\n        action = 'profile_update';\n        actionData = { sessionToken: session.sessionToken, field: 'email', value: userMessage };\n        session.step = -2;\n        session.pendingField = null;\n        response = 'Mise à jour de ton email...';\n      }\n    } else if (session.pendingField === 'interests') {\n      if (userMessage.length < 2) {\n        response = 'Indique au moins un centre d\\'intérêt.';\n      } else {\n        action = 'profile_update';\n        actionData = { sessionToken: session.sessionToken, field: 'interests', value: userMessage };\n        session.step = -2;\n        session.pendingField = null;\n        response = 'Mise à jour de tes intérêts...';\n      }\n    } else if (session.pendingField === 'schedule_time') {\n      if (!/^([01]?\\d|2[0-3]):[0-5]\\d$/.test(userMessage)) {\n        response = 'Heure invalide (HH:MM).';\n      } else {\n        action = 'profile_update';\n        actionData = { sessionToken: session.sessionToken, field: 'schedule_time', value: userMessage };\n        session.step = -2;\n        session.pendingField = null;\n        response = 'Mise à jour de ton horaire...';\n      }\n    }\n  } else if (session.step === 30) {\n    if (!requireAuth()) {\n      // response already set\n    } else if (msgLower === '1' || msgLower.includes('voir')) {\n      action = 'gdpr_export';\n      actionData = { sessionToken: session.sessionToken };\n      session.step = -2;\n      response = 'Export de tes données...';\n    } else if (msgLower === '2' || msgLower.includes('désinscri') || msgLower.includes('desinscri')) {\n      session.step = 31;\n      response = 'Confirmer la désinscription newsletter ? Tu garderas ton compte mais ne recevras plus d\\'emails. (oui/non)';\n    } else if (msgLower === '3' || msgLower.includes('supprim')) {\n      session.step = 32;\n      response = 'ATTENTION : suppression définitive de toutes tes données. Confirme en tapant exactement : SUPPRIMER MON COMPTE';\n    } else {\n      session.step = -2;\n      response = 'Retour au menu.';\n    }\n  } else if (session.step === 31) {\n    if (['oui', 'yes'].includes(msgLower)) {\n      action = 'gdpr_unsubscribe';\n      actionData = { sessionToken: session.sessionToken };\n      session.step = -2;\n      response = 'Désinscription en cours...';\n    } else if (['non', 'no'].includes(msgLower)) {\n      session.step = -2;\n      response = 'Désinscription annulée.';\n    } else {\n      response = 'Réponds oui ou non.';\n    }\n  } else if (session.step === 32) {\n    if (userMessage === 'SUPPRIMER MON COMPTE') {\n      action = 'gdpr_delete';\n      actionData = { sessionToken: session.sessionToken };\n      session.authenticated = false;\n      session.sessionToken = null;\n      session.userId = null;\n      session.username = null;\n      session.step = -1;\n      response = 'Suppression de ton compte en cours...';\n    } else {\n      session.step = -2;\n      response = 'Suppression annulée. Retour au menu.';\n    }\n  } else {\n    session.step = -2;\n    response = `Bonjour ${session.username} ! Tape profil, rgpd ou déconnexion.`;\n  }\n}\n\nstaticData.sessions[sessionId] = session;\n\nreturn {\n  json: {\n    output: response,\n    action,\n    actionData,\n    sessionId,\n    session\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "94ed9a90-a18f-4eba-84d7-ae3ef261e934",
+      "name": "Process Message"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "register",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "register"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "login",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "login"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "logout",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "logout"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "profile_view",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "profile_view"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "profile_update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "profile_update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "gdpr_export",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gdpr_export"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "gdpr_unsubscribe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gdpr_unsubscribe"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "gdpr_delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "gdpr_delete"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        480,
+        300
+      ],
+      "id": "324d4922-cbb8-4cb8-bd05-b4ecb81595d5",
+      "name": "Route Action"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Register",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "username": "={{ $json.actionData.username }}",
+            "password": "={{ $json.actionData.password }}",
+            "email": "={{ $json.actionData.email }}",
+            "interests": "={{ $json.actionData.interests }}",
+            "schedule_time": "={{ $json.actionData.schedule_time }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "d70c2411-9ebf-4818-9ecc-495114c3d480",
+      "name": "Exec Register"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Login",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "username": "={{ $json.actionData.username }}",
+            "password": "={{ $json.actionData.password }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "12359568-b80b-4afe-bdf7-edde6d0776bb",
+      "name": "Exec Login"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Logout",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionToken": "={{ $json.actionData.sessionToken }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        200
+      ],
+      "id": "40a8fa1c-9b01-4a6a-bb50-16d772725d56",
+      "name": "Exec Logout"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Profile",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionToken": "={{ $json.actionData.sessionToken }}",
+            "action": "view"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        300
+      ],
+      "id": "dc726af0-9823-4dc9-af95-a2bf5b16edb1",
+      "name": "Exec Profile View"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Profile",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionToken": "={{ $json.actionData.sessionToken }}",
+            "action": "update",
+            "field": "={{ $json.actionData.field }}",
+            "value": "={{ $json.actionData.value }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        400
+      ],
+      "id": "103aa126-d850-400b-9964-789703af82a0",
+      "name": "Exec Profile Update"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub GDPR",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionToken": "={{ $json.actionData.sessionToken }}",
+            "action": "export"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        500
+      ],
+      "id": "4d968cf6-f59f-4daf-b940-e54847673405",
+      "name": "Exec GDPR Export"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub GDPR",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionToken": "={{ $json.actionData.sessionToken }}",
+            "action": "unsubscribe"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        600
+      ],
+      "id": "77b3b69e-b4d9-4c95-834e-07c59724f31b",
+      "name": "Exec GDPR Unsubscribe"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub GDPR",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionToken": "={{ $json.actionData.sessionToken }}",
+            "action": "delete"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        700
+      ],
+      "id": "dace0662-51dd-4a60-ae4f-705fef95291d",
+      "name": "Exec GDPR Delete"
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { output: $('Process Message').first().json.output } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        600
+      ],
+      "id": "52b22d85-cdfb-43a4-9ce7-adb08fc83b46",
+      "name": "Direct Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst staticData = $getWorkflowStaticData('global');\nconst processData = $('Process Message').first().json;\nconst sessionId = processData.sessionId;\nlet session = staticData.sessions[sessionId] || processData.session;\nlet response = processData.output;\nconst action = processData.action;\nconst result = $input.first().json;\n\nif (action === 'none') {\n  return { json: { output: response } };\n}\n\nif (action === 'register') {\n  if (result.success) {\n    session.authenticated = true;\n    session.sessionToken = result.sessionToken;\n    session.userId = result.userId;\n    session.username = result.username;\n    session.step = -2;\n    response = `Compte créé ! Bienvenue ${result.username}.\\n\\nTu es connecté. Tape \"profil\" pour voir/modifier tes infos ou \"aide\".`;\n  } else {\n    session.step = -1;\n    response = result.error || 'Erreur lors de l\\'inscription.';\n  }\n} else if (action === 'login') {\n  if (result.success) {\n    session.authenticated = true;\n    session.sessionToken = result.sessionToken;\n    session.userId = result.userId;\n    session.username = result.username;\n    session.step = -2;\n    response = `Connexion réussie ! Bonjour ${result.username}.\\n\\nTape \"profil\", \"rgpd\" ou \"aide\".`;\n  } else {\n    response = result.error || 'Identifiants incorrects.';\n  }\n} else if (action === 'logout') {\n  response = 'Tu es déconnecté. Tape \"connexion\" pour te reconnecter.';\n} else if (action === 'profile_view') {\n  if (result.success) {\n    response = `Ton profil :\\n• Utilisateur : ${result.username}\\n• Email : ${result.email}\\n• Intérêts : ${result.interests}\\n• Horaire : ${result.schedule_time}\\n• Newsletter : ${result.active ? 'active' : 'désactivée'}`;\n  } else {\n    response = result.error || 'Impossible de charger le profil.';\n  }\n} else if (action === 'profile_update') {\n  response = result.success\n    ? `Profil mis à jour : ${result.field} = ${result.value}`\n    : (result.error || 'Erreur de mise à jour.');\n} else if (action === 'gdpr_export') {\n  if (result.success) {\n    response = `Export RGPD (Art. 15/20) :\\n${JSON.stringify(result.data, null, 2)}\\n\\nAucune donnée n\\'est partagée avec d\\'autres utilisateurs.`;\n  } else {\n    response = result.error || 'Export impossible.';\n  }\n} else if (action === 'gdpr_unsubscribe') {\n  response = result.success\n    ? 'Tu es désinscrit de la newsletter. Ton compte reste actif. Tu peux te réabonner via \"profil\".'\n    : (result.error || 'Erreur de désinscription.');\n} else if (action === 'gdpr_delete') {\n  response = result.success\n    ? 'Ton compte et toutes tes données personnelles ont été supprimés conformément au RGPD.'\n    : (result.error || 'Erreur de suppression.');\n}\n\nstaticData.sessions[sessionId] = session;\nreturn { json: { output: response } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "id": "8891d486-12d7-48d3-b7d8-fc1c5bbb119f",
+      "name": "Merge Results"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Exec Register",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Login",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Logout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Profile View",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec Profile Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec GDPR Export",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec GDPR Unsubscribe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exec GDPR Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Direct Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Register": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Login": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Logout": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Profile View": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec Profile Update": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec GDPR Export": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec GDPR Unsubscribe": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exec GDPR Delete": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Direct Response": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "07108797-bf51-4cfb-9632-772bacbefb00",
+  "meta": {
+    "instanceId": "persona-local"
+  },
+  "tags": [
+    {
+      "name": "persona"
+    },
+    {
+      "name": "security"
+    }
+  ]
+}
