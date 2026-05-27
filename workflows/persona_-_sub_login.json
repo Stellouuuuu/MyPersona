@@ -1,0 +1,232 @@
+{
+  "name": "Persona - Sub Login",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "username"
+            },
+            {
+              "name": "password"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "76963b30-9cd5-4de8-aeca-7dabb787557b",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "id": "51ce0255-03e3-4ebf-86f5-fa577d43f86a",
+      "name": "Get All Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.loginAttempts) staticData.loginAttempts = {};\n\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst username = (trigger.username || '').trim();\nconst password = trigger.password || '';\nconst key = username.toLowerCase();\n\nconst attempts = staticData.loginAttempts[key] || { count: 0, lastAttempt: 0 };\nconst now = Date.now();\nif (attempts.count >= 5 && now - attempts.lastAttempt < 15 * 60 * 1000) {\n  return { json: { success: false, error: 'Trop de tentatives. Réessaie dans 15 minutes.', _update: false } };\n}\n\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => (r.username || '').toLowerCase() === key);\n\nif (!user) {\n  attempts.count += 1;\n  attempts.lastAttempt = now;\n  staticData.loginAttempts[key] = attempts;\n  return { json: { success: false, error: 'Identifiants incorrects.', _update: false } };\n}\n\nconst hash = hashPassword(password, user.salt || '');\nif (hash !== user.password_hash) {\n  attempts.count += 1;\n  attempts.lastAttempt = now;\n  staticData.loginAttempts[key] = attempts;\n  return { json: { success: false, error: 'Identifiants incorrects.', _update: false } };\n}\n\nif (user.active === false) {\n  return { json: { success: false, error: 'Compte désactivé.', _update: false } };\n}\n\nstaticData.loginAttempts[key] = { count: 0, lastAttempt: 0 };\n\nconst sessionToken = generateToken();\nconst expiresAt = tokenExpires(24);\n\nreturn {\n  json: {\n    _update: true,\n    rowId: user.id,\n    session_token: sessionToken,\n    session_expires_at: expiresAt,\n    success: true,\n    sessionToken,\n    userId: user.id,\n    username: user.username,\n    error: null\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "127e4459-66ef-4848-9934-c4179ec2b150",
+      "name": "Verify Credentials"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ffa33271-075c-40f0-9ba5-179747e80919",
+              "leftValue": "={{ $json._update }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "170130d1-7e7a-4142-b74c-2023e47f352f",
+      "name": "Login OK"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.rowId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_token": "={{ $json.session_token }}",
+            "session_expires_at": "={{ $json.session_expires_at }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -80
+      ],
+      "id": "4ff60aae-f51c-4396-af90-107b93a66e91",
+      "name": "Update Session Token"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst v = $('Verify Credentials').first().json;\nreturn { json: { success: true, sessionToken: v.sessionToken, userId: v.userId, username: v.username, error: null } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -80
+      ],
+      "id": "09aae8d2-9fdf-4a35-9c19-e52ab0ed2645",
+      "name": "Format OK"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn { json: { success: false, error: $json.error || 'Connexion impossible.' } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        120
+      ],
+      "id": "92810d8d-9f21-4341-83ec-0ea9cc157c5b",
+      "name": "Format Error"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Verify Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Credentials": {
+      "main": [
+        [
+          {
+            "node": "Login OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login OK": {
+      "main": [
+        [
+          {
+            "node": "Update Session Token",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Session Token": {
+      "main": [
+        [
+          {
+            "node": "Format OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "bcdd8424-9782-43fc-9594-25758d50a052",
+  "meta": {
+    "instanceId": "persona-local"
+  },
+  "tags": [
+    {
+      "name": "persona"
+    },
+    {
+      "name": "security"
+    }
+  ]
+}
