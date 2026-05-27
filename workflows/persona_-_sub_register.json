@@ -1,0 +1,264 @@
+{
+  "name": "Persona - Sub Register",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "username"
+            },
+            {
+              "name": "password"
+            },
+            {
+              "name": "email"
+            },
+            {
+              "name": "interests"
+            },
+            {
+              "name": "schedule_time"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fee2d6e3-7a9d-4b73-9d8f-6f90c99954a7",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst input = $input.first().json;\nconst username = (input.username || '').trim();\nconst password = input.password || '';\nconst email = (input.email || '').trim();\nconst interests = (input.interests || '').trim();\nconst schedule_time = (input.schedule_time || '').trim();\n\nif (!isValidUsername(username)) {\n  return { json: { success: false, error: 'Nom d\\'utilisateur invalide.' } };\n}\nif (!isStrongPassword(password)) {\n  return { json: { success: false, error: 'Mot de passe trop faible.' } };\n}\nif (!isValidEmail(email)) {\n  return { json: { success: false, error: 'Email invalide.' } };\n}\n\nconst salt = generateSalt();\nconst passwordHash = hashPassword(password, salt);\nconst sessionToken = generateToken();\nconst expiresAt = tokenExpires(24);\nconst now = new Date().toISOString();\n\nreturn {\n  json: {\n    _insert: true,\n    username,\n    password_hash: passwordHash,\n    salt,\n    email,\n    interests,\n    schedule_time,\n    active: true,\n    session_token: sessionToken,\n    session_expires_at: expiresAt,\n    gdpr_consent_at: now,\n    created_at: now,\n    success: true,\n    sessionToken,\n    userId: username,\n    error: null\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "fa0ca361-8b43-42cd-a57e-735335a76444",
+      "name": "Prepare User"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "id": "1bbb1991-1174-4674-ba4a-fccbbdd99ac5",
+      "name": "Get All Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst newUser = $('Prepare User').first().json;\nconst rows = $input.all().map(i => i.json);\nconst exists = rows.some(r => (r.username || '').toLowerCase() === newUser.username.toLowerCase());\nif (exists) {\n  return { json: { success: false, error: 'Ce nom d\\'utilisateur existe déjà.', _insert: false } };\n}\nreturn { json: newUser };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "0ee85a1a-8e9a-4dd5-970d-8af09216e821",
+      "name": "Check Duplicate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "7dea6786-bb83-41b3-87c1-5014ef54ab58",
+              "leftValue": "={{ $json._insert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "77faa301-aa0d-4007-a4d0-a3c7e813bd71",
+      "name": "Should Insert"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "username": "={{ $json.username }}",
+            "password_hash": "={{ $json.password_hash }}",
+            "salt": "={{ $json.salt }}",
+            "email": "={{ $json.email }}",
+            "interests": "={{ $json.interests }}",
+            "schedule_time": "={{ $json.schedule_time }}",
+            "active": "={{ $json.active }}",
+            "session_token": "={{ $json.session_token }}",
+            "session_expires_at": "={{ $json.session_expires_at }}",
+            "gdpr_consent_at": "={{ $json.gdpr_consent_at }}",
+            "created_at": "={{ $json.created_at }}"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -80
+      ],
+      "id": "4921b674-b329-4355-a240-5f6efe502f6a",
+      "name": "Insert User"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst u = $('Check Duplicate').first().json;\nreturn { json: { success: true, sessionToken: u.session_token, userId: u.username, username: u.username, error: null } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -80
+      ],
+      "id": "5e107443-d154-4191-b19a-359c731fdbeb",
+      "name": "Format Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn { json: { success: false, error: $json.error || 'Inscription impossible.' } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        120
+      ],
+      "id": "c4e5d5d6-1b5d-4b18-8b21-499785a9e77d",
+      "name": "Format Error"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare User": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Should Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert User",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert User": {
+      "main": [
+        [
+          {
+            "node": "Format Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2b48dc81-2c30-4e57-8eb3-ccf9ac969037",
+  "meta": {
+    "instanceId": "persona-local"
+  },
+  "tags": [
+    {
+      "name": "persona"
+    },
+    {
+      "name": "security"
+    }
+  ]
+}
