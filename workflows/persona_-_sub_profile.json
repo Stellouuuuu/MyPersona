@@ -1,0 +1,264 @@
+{
+  "name": "Persona - Sub Profile",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "sessionToken"
+            },
+            {
+              "name": "action"
+            },
+            {
+              "name": "field"
+            },
+            {
+              "name": "value"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2f616a14-411c-4359-af19-02293482fddd",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "id": "448d3f2a-b267-4103-993f-821d420a0537",
+      "name": "Get All Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst action = trigger.action;\nconst token = trigger.sessionToken || '';\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => r.session_token === token);\n\nif (!user || isExpired(user.session_expires_at)) {\n  return { json: { success: false, error: 'Session invalide ou expirée.' } };\n}\n\nif (action === 'view') {\n  return {\n    json: {\n      success: true,\n      username: user.username,\n      email: user.email,\n      interests: user.interests,\n      schedule_time: user.schedule_time,\n      active: user.active !== false\n    }\n  };\n}\n\nconst field = trigger.field;\nconst value = (trigger.value || '').trim();\nconst allowed = ['email', 'interests', 'schedule_time'];\n\nif (!allowed.includes(field)) {\n  return { json: { success: false, error: 'Champ non autorisé.' } };\n}\nif (field === 'email' && !isValidEmail(value)) {\n  return { json: { success: false, error: 'Email invalide.' } };\n}\nif (field === 'schedule_time' && !isValidTime(value)) {\n  return { json: { success: false, error: 'Horaire invalide.' } };\n}\nif (field === 'interests' && value.length < 2) {\n  return { json: { success: false, error: 'Intérêts invalides.' } };\n}\n\nreturn {\n  json: {\n    _update: true,\n    rowId: user.id,\n    field,\n    value,\n    success: true,\n    error: null\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "533ac314-e198-4285-aa7e-956670b0787f",
+      "name": "Profile Action"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e4a6c5a9-a8ea-4353-a38b-7a73d157b7cc",
+              "leftValue": "={{ $json._update }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "41d3ac29-8c50-4eed-9ac5-d419f66857d2",
+      "name": "Needs Update"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json;\nconst out = { id: d.rowId, session_token: $('Get All Users').all().find(i => i.json.id === d.rowId)?.json?.session_token };\nout[d.field] = d.value;\nreturn { json: out };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -80
+      ],
+      "id": "3d6c8599-a523-4a34-a0dc-ffe4ff22d2bd",
+      "name": "Build Update"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $json.email }}",
+            "interests": "={{ $json.interests }}",
+            "schedule_time": "={{ $json.schedule_time }}",
+            "active": "={{ $json.active }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -80
+      ],
+      "id": "abe7a463-5c57-4b9d-9c65-83aa20d25822",
+      "name": "Update User Field"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $('Profile Action').first().json;\nreturn { json: { success: true, field: d.field, value: d.value } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -80
+      ],
+      "id": "3dfee222-6d15-4574-89a8-567f87e246aa",
+      "name": "Format Update"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn { json: $json };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        120
+      ],
+      "id": "df51e514-1e99-46c1-bf87-4928c0fabe43",
+      "name": "Pass View"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Profile Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile Action": {
+      "main": [
+        [
+          {
+            "node": "Needs Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Update": {
+      "main": [
+        [
+          {
+            "node": "Build Update",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pass View",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Update": {
+      "main": [
+        [
+          {
+            "node": "Update User Field",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update User Field": {
+      "main": [
+        [
+          {
+            "node": "Format Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a17e195a-03d9-4ca8-89a2-95b5f83c1351",
+  "meta": {
+    "instanceId": "persona-local"
+  },
+  "tags": [
+    {
+      "name": "persona"
+    },
+    {
+      "name": "security"
+    }
+  ]
+}
