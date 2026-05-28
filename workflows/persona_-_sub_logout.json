@@ -1,0 +1,168 @@
+{
+  "name": "Persona - Sub Logout",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "sessionToken"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9eb90187-0651-4f9b-8f85-3e90575dde80",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "id": "6ff89f22-497c-434d-83bf-8c6550b25e8d",
+      "name": "Get All Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst token = $('When Executed by Another Workflow').first().json.sessionToken;\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => r.session_token === token);\nif (!user) return { json: { success: true } };\nreturn { json: { _update: true, rowId: user.id, session_token: '', session_expires_at: '' } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "9bfb0a39-0100-439a-b815-04dedce6a125",
+      "name": "Clear Session"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.rowId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_token": "={{ $json.session_token }}",
+            "session_expires_at": "={{ $json.session_expires_at }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ],
+      "id": "33173395-8bb7-45ed-aee0-192d599875cb",
+      "name": "Clear Token"
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { success: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "39740dda-6c3c-404f-adbf-758e8a1d45be",
+      "name": "Format"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Clear Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Session": {
+      "main": [
+        [
+          {
+            "node": "Clear Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Token": {
+      "main": [
+        [
+          {
+            "node": "Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "467025b5-5bea-4490-9fc9-b96d9d8fbf77",
+  "meta": {
+    "instanceId": "persona-local"
+  },
+  "tags": [
+    {
+      "name": "persona"
+    },
+    {
+      "name": "security"
+    }
+  ]
+}
