@@ -23,3 +23,15 @@ python3 scripts/migrate_data_tables.py
 Ouvrir http://localhost:5678 → importer les workflows depuis `workflows/` → publier les sub-workflows puis le workflow principal.
 
 Guide détaillé : [docs/GUIDE_INSTALLATION.md](docs/GUIDE_INSTALLATION.md)
+
+## Workflows
+
+| Workflow | Rôle |
+|----------|------|
+| `Persona - Utilisateur & Securite` | Chatbot principal (point d'entrée) |
+| `Persona - Sub Register` | Inscription + hash mot de passe |
+| `Persona - Sub Login` | Connexion |
+| `Persona - Sub Logout` | Déconnexion |
+| `Persona - Sub Profile` | Voir / modifier profil |
+| `Persona - Sub GDPR` | Export, désinscription, suppression |
+| `Persona - Sub Validate Session` | Validation session (équipe newsletter) |
