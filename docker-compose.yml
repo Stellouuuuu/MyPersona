@@ -11,5 +11,6 @@ services:
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Paris}
       - TZ=${GENERIC_TIMEZONE:-Europe/Paris}
       - N8N_SECURE_COOKIE=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
     volumes:
       - ./n8n_data:/home/node/.n8n
