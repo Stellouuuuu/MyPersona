@@ -10,6 +10,7 @@ Ce dépôt couvre la partie **Côté Utilisateur & Sécurité** :
 - Inscription via chatbot
 - Authentification (login + session)
 - Gestion du profil (email, intérêts, horaire)
+- Validation de session avant modification profil
 - Conformité RGPD (export, désinscription, suppression)
 
 ## Démarrage rapide
