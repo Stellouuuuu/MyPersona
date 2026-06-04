@@ -17,3 +17,4 @@ services:
       - "host-gateway:host-gateway"
     volumes:
       - ./n8n_data:/home/node/.n8n
+<!-- dev local : N8N_SECURE_COOKIE=false -->
