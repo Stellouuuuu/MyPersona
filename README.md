@@ -62,3 +62,5 @@ Index complet : [docs/README.md](docs/README.md)
 ├── docs/                   # Documentation
 └── n8n_data/               # Données N8N (base SQLite, logs)
 ```
+
+> **Note livrable :** anonymiser les credentials N8N dans les exports JSON avant tout partage externe.
