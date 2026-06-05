@@ -64,3 +64,7 @@ Index complet : [docs/README.md](docs/README.md)
 ```
 
 > **Note livrable :** anonymiser les credentials N8N dans les exports JSON avant tout partage externe.
+
+## Livrable
+
+Fichiers JSON exportables dans `workflows/` — **anonymiser** les credentials avant partage (cf. sujet projet).
