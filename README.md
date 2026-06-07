@@ -10,7 +10,6 @@ Ce dépôt couvre la partie **Côté Utilisateur & Sécurité** :
 - Inscription via chatbot
 - Authentification (login + session)
 - Gestion du profil (email, intérêts, horaire)
-- Validation de session avant modification profil
 - Conformité RGPD (export, désinscription, suppression)
 
 ## Démarrage rapide
@@ -62,8 +61,6 @@ Index complet : [docs/README.md](docs/README.md)
 ├── docs/                   # Documentation
 └── n8n_data/               # Données N8N (base SQLite, logs)
 ```
-
-> **Note livrable :** anonymiser les credentials N8N dans les exports JSON avant tout partage externe.
 
 ## Livrable
 
