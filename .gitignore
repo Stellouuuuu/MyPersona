@@ -1,5 +1,0 @@
-.env
-*.env
-persona/users/*.json
-node_modules/
-persona/previews/
