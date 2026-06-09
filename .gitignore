@@ -1,0 +1,37 @@
+# Secrets & config locale
+.env
+.env.*
+!.env.example
+
+# Données N8N locales
+n8n_data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Modules Node (évite des push gigantesques)
+node_modules/
+**/node_modules/
+
+# Build caches
+.vite/
+dist/
+build/
+
+# Nginx overrides / configs locaux
+docker-compose.override.yml
+
+# Documents & scripts internes (à ne pas publier)
+docs/
+scripts/
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+

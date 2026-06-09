@@ -1,0 +1,85 @@
+{
+  "name": "Persona - Sub Audit Log",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            { "name": "user_id" },
+            { "name": "username" },
+            { "name": "action" },
+            { "name": "details" },
+            { "name": "ip_or_source" }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "a1b2c3d4-audit-trigger-0001",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst now = new Date().toISOString();\nreturn {\n  json: {\n    timestamp: now,\n    user_id: String(input.user_id || ''),\n    username: input.username || 'system',\n    action: input.action || 'unknown',\n    details: typeof input.details === 'string' ? input.details : JSON.stringify(input.details || {}),\n    ip_or_source: input.ip_or_source || 'workflow'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "a1b2c3d4-audit-prepare-002",
+      "name": "Prepare Entry"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "AUDIT_LOG_TABLE",
+          "mode": "list",
+          "cachedResultName": "audit_log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp }}",
+            "user_id": "={{ $json.user_id }}",
+            "username": "={{ $json.username }}",
+            "action": "={{ $json.action }}",
+            "details": "={{ $json.details }}",
+            "ip_or_source": "={{ $json.ip_or_source }}"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [440, 0],
+      "id": "a1b2c3d4-audit-insert-003",
+      "name": "Insert Audit Row"
+    },
+    {
+      "parameters": {
+        "jsCode": "return { json: { success: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "a1b2c3d4-audit-done-004",
+      "name": "Done"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "Prepare Entry", "type": "main", "index": 0 }]]
+    },
+    "Prepare Entry": {
+      "main": [[{ "node": "Insert Audit Row", "type": "main", "index": 0 }]]
+    },
+    "Insert Audit Row": {
+      "main": [[{ "node": "Done", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "instanceId": "persona-local" },
+  "tags": [{ "name": "persona" }, { "name": "security" }, { "name": "bonus" }]
+}

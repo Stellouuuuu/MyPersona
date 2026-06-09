@@ -1,0 +1,228 @@
+{
+  "name": "Persona - Email Feedback",
+  "nodes": [
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "read",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "fb-imap-001",
+      "name": "Email Trigger",
+      "credentials": {
+        "imap": {
+          "id": "6ivNqkGCEknUaT2B",
+          "name": "IMAP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $input.first().json;\nconst from = (email.from || email.fromAddress || '').toLowerCase();\nconst subject = (email.subject || '').toLowerCase();\nconst body = (email.textPlain || email.text || email.textHtml || '').replace(/<[^>]+>/g, ' ').trim();\n\nconst isReply = subject.includes('persona') || subject.includes('newsletter') || subject.includes('re:');\nif (!isReply || !from || body.length < 5) {\n  return [{ json: { skip: true } }];\n}\n\nreturn [{ json: { skip: false, fromEmail: from.match(/<([^>]+)>/)?.[1] || from, body: body.slice(0, 2000), subject } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "fb-parse-002",
+      "name": "Parse Email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0],
+      "id": "fb-if-003",
+      "name": "Is Feedback"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [660, -80],
+      "id": "fb-users-004",
+      "name": "Get All Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "const emailData = $('Parse Email').first().json;\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => (r.email || '').toLowerCase() === emailData.fromEmail.toLowerCase());\nif (!user) {\n  return [{ json: { success: false, error: 'Utilisateur inconnu pour cet email.' } }];\n}\n\nconst body = emailData.body.toLowerCase();\nlet blocked_topics = (user.blocked_topics || '').split(',').map(s => s.trim()).filter(Boolean);\nlet blocked_sources = (user.blocked_sources || '').split(',').map(s => s.trim()).filter(Boolean);\nlet preferences = user.preferences || '';\nconst changes = [];\n\nconst articleMatch = body.match(/article\\s*(\\d+)/i);\nif (articleMatch && (body.includes('pas aime') || body.includes('n aime pas') || body.includes('inutile') || body.includes('enleve'))) {\n  changes.push(`Article ${articleMatch[1]} signale comme non pertinent`);\n}\n\nconst moinsMatch = body.match(/moins\\s+(?:de\\s+)?([a-zàâäéèêëïîôùûüç\\s,]+)/i);\nif (moinsMatch) {\n  const topic = moinsMatch[1].split(/[,\\.!\\?]/)[0].trim();\n  if (topic && !blocked_topics.map(t => t.toLowerCase()).includes(topic.toLowerCase())) {\n    blocked_topics.push(topic);\n    changes.push(`Topic bloque: ${topic}`);\n  }\n}\n\nconst plusMatch = body.match(/plus\\s+(?:de\\s+)?([a-zàâäéèêëïîôùûüç\\s,]+)/i);\nif (plusMatch) {\n  const topic = plusMatch[1].split(/[,\\.!\\?]/)[0].trim();\n  preferences = preferences ? `${preferences}; plus de ${topic}` : `plus de ${topic}`;\n  changes.push(`Preference ajoutee: plus de ${topic}`);\n}\n\nconst sourceMatch = body.match(/(?:evite|bloque|stop)\\s+(?:la source\\s+)?([a-z0-9\\s]+)/i);\nif (sourceMatch) {\n  const src = sourceMatch[1].trim();\n  if (src && !blocked_sources.map(s => s.toLowerCase()).includes(src.toLowerCase())) {\n    blocked_sources.push(src);\n    changes.push(`Source bloquee: ${src}`);\n  }\n}\n\nif (changes.length === 0) {\n  preferences = preferences ? `${preferences}; ${emailData.body.slice(0, 200)}` : emailData.body.slice(0, 200);\n  changes.push('Feedback enregistre dans preferences');\n}\n\nreturn [{\n  json: {\n    success: true,\n    rowId: user.username,\n    username: user.username,\n    email: user.email,\n    blocked_topics: blocked_topics.join(','),\n    blocked_sources: blocked_sources.join(','),\n    preferences,\n    changes,\n    summary: changes.join('. ')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, -80],
+      "id": "fb-process-005",
+      "name": "Process Feedback"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, -80],
+      "id": "fb-if2-006",
+      "name": "Processed OK"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "username",
+              "condition": "eq",
+              "keyValue": "={{ $json.username }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "blocked_topics": "={{ $json.blocked_topics }}",
+            "blocked_sources": "={{ $json.blocked_sources }}",
+            "preferences": "={{ $json.preferences }}"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1320, -160],
+      "id": "fb-update-007",
+      "name": "Update User"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fb = $('Process Feedback').first().json;\nconst items = fb.changes.map(c => `<li>${c}</li>`).join('');\nconst html = `<p>Bonjour ${fb.username},</p><p>Merci pour votre retour ! Persona a mis a jour vos preferences :</p><ul>${items}</ul><p>Votre prochaine newsletter en tiendra compte.</p><p style=\"color:#999;font-size:12px;\">Persona - IA sans interface</p>`;\nreturn { json: { html, email: fb.email } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1430, -160],
+      "id": "fb-html-007b",
+      "name": "Build Confirm HTML"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.GMAIL_ADDRESS || 'persona@localhost' }}",
+        "toEmail": "={{ $json.email }}",
+        "subject": "Persona — Votre feedback a ete pris en compte",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1540, -160],
+      "id": "fb-confirm-008",
+      "name": "Send Confirmation"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Audit Log",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $('Process Feedback').first().json.username }}",
+            "username": "={{ $('Process Feedback').first().json.username }}",
+            "action": "feedback_received",
+            "details": "={{ $('Process Feedback').first().json.summary }}",
+            "ip_or_source": "email_reply"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1760, -160],
+      "id": "fb-audit-009",
+      "name": "Log Audit"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 120],
+      "id": "fb-skip-010",
+      "name": "Skip"
+    }
+  ],
+  "connections": {
+    "Email Trigger": {
+      "main": [[{ "node": "Parse Email", "type": "main", "index": 0 }]]
+    },
+    "Parse Email": {
+      "main": [[{ "node": "Is Feedback", "type": "main", "index": 0 }]]
+    },
+    "Is Feedback": {
+      "main": [
+        [{ "node": "Get All Users", "type": "main", "index": 0 }],
+        [{ "node": "Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get All Users": {
+      "main": [[{ "node": "Process Feedback", "type": "main", "index": 0 }]]
+    },
+    "Process Feedback": {
+      "main": [[{ "node": "Processed OK", "type": "main", "index": 0 }]]
+    },
+    "Processed OK": {
+      "main": [
+        [{ "node": "Update User", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Update User": {
+      "main": [[{ "node": "Build Confirm HTML", "type": "main", "index": 0 }]]
+    },
+    "Build Confirm HTML": {
+      "main": [[{ "node": "Send Confirmation", "type": "main", "index": 0 }]]
+    },
+    "Send Confirmation": {
+      "main": [[{ "node": "Log Audit", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": { "instanceId": "persona-local" },
+  "tags": [{ "name": "persona" }, { "name": "bonus" }]
+}

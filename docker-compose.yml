@@ -11,9 +11,30 @@ services:
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Paris}
       - TZ=${GENERIC_TIMEZONE:-Europe/Paris}
       - N8N_SECURE_COOKIE=false
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
-      - OLLAMA_HOST=http://host-gateway:11434
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host-gateway:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - PERSONA_GDPR_SECRET=${PERSONA_GDPR_SECRET:-change-me-in-production}
+      - PERSONA_PUBLIC_URL=${PERSONA_PUBLIC_URL:-http://localhost:5678}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GMAIL_ADDRESS=${GMAIL_ADDRESS:-}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
     extra_hosts:
       - "host-gateway:host-gateway"
     volumes:
       - ./n8n_data:/home/node/.n8n
+      - ./lib:/persona/lib:ro
+
+  # Portail démo statique (optionnel)
+  demo:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/usr/share/nginx/html:ro
+      - ./nginx/demo.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - n8n
+    profiles:
+      - demo

@@ -45,7 +45,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.loginAttempts) staticData.loginAttempts = {};\n\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst username = (trigger.username || '').trim();\nconst password = trigger.password || '';\nconst key = username.toLowerCase();\n\nconst attempts = staticData.loginAttempts[key] || { count: 0, lastAttempt: 0 };\nconst now = Date.now();\nif (attempts.count >= 5 && now - attempts.lastAttempt < 15 * 60 * 1000) {\n  return { json: { success: false, error: 'Trop de tentatives. Réessaie dans 15 minutes.', _update: false } };\n}\n\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => (r.username || '').toLowerCase() === key);\n\nif (!user) {\n  attempts.count += 1;\n  attempts.lastAttempt = now;\n  staticData.loginAttempts[key] = attempts;\n  return { json: { success: false, error: 'Identifiants incorrects.', _update: false } };\n}\n\nconst hash = hashPassword(password, user.salt || '');\nif (hash !== user.password_hash) {\n  attempts.count += 1;\n  attempts.lastAttempt = now;\n  staticData.loginAttempts[key] = attempts;\n  return { json: { success: false, error: 'Identifiants incorrects.', _update: false } };\n}\n\nif (user.active === false) {\n  return { json: { success: false, error: 'Compte désactivé.', _update: false } };\n}\n\nstaticData.loginAttempts[key] = { count: 0, lastAttempt: 0 };\n\nconst sessionToken = generateToken();\nconst expiresAt = tokenExpires(24);\n\nreturn {\n  json: {\n    _update: true,\n    rowId: user.id,\n    session_token: sessionToken,\n    session_expires_at: expiresAt,\n    success: true,\n    sessionToken,\n    userId: user.id,\n    username: user.username,\n    error: null\n  }\n};\n"
+        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.loginAttempts) staticData.loginAttempts = {};\n\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst username = (trigger.username || '').trim();\nconst password = trigger.password || '';\nconst key = username.toLowerCase();\n\nconst attempts = staticData.loginAttempts[key] || { count: 0, lastAttempt: 0 };\nconst now = Date.now();\nif (attempts.count >= 5 && now - attempts.lastAttempt < 15 * 60 * 1000) {\n  return { json: { success: false, error: 'Trop de tentatives. Réessaie dans 15 minutes.', _update: false } };\n}\n\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => (r.username || '').toLowerCase() === key);\n\nif (!user) {\n  attempts.count += 1;\n  attempts.lastAttempt = now;\n  staticData.loginAttempts[key] = attempts;\n  return { json: { success: false, error: 'Identifiants incorrects.', _update: false } };\n}\n\nconst hash = hashPassword(password, user.salt || '');\nif (hash !== user.password_hash) {\n  attempts.count += 1;\n  attempts.lastAttempt = now;\n  staticData.loginAttempts[key] = attempts;\n  return { json: { success: false, error: 'Identifiants incorrects.', _update: false } };\n}\n\nif (user.active === false) {\n  return { json: { success: false, error: 'Compte désactivé.', _update: false } };\n}\n\nstaticData.loginAttempts[key] = { count: 0, lastAttempt: 0 };\n\nconst sessionToken = generateToken();\nconst expiresAt = tokenExpires(24);\n\nreturn {\n  json: {\n    _update: true,\n    rowId: user.username,\n    username: user.username,\n    session_token: sessionToken,\n    session_expires_at: expiresAt,\n    success: true,\n    sessionToken,\n    userId: user.username,\n    username: user.username,\n    error: null\n  }\n};\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -100,9 +100,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "id",
+              "keyName": "username",
               "condition": "eq",
-              "keyValue": "={{ $json.rowId }}"
+              "keyValue": "={{ $json.username }}"
             }
           ]
         },
@@ -192,7 +192,9 @@
             "node": "Update Session Token",
             "type": "main",
             "index": 0
-          },
+          }
+        ],
+        [
           {
             "node": "Format Error",
             "type": "main",

@@ -34,7 +34,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst input = $input.first().json;\nconst username = (input.username || '').trim();\nconst password = input.password || '';\nconst email = (input.email || '').trim();\nconst interests = (input.interests || '').trim();\nconst schedule_time = (input.schedule_time || '').trim();\n\nif (!isValidUsername(username)) {\n  return { json: { success: false, error: 'Nom d\\'utilisateur invalide.' } };\n}\nif (!isStrongPassword(password)) {\n  return { json: { success: false, error: 'Mot de passe trop faible.' } };\n}\nif (!isValidEmail(email)) {\n  return { json: { success: false, error: 'Email invalide.' } };\n}\n\nconst salt = generateSalt();\nconst passwordHash = hashPassword(password, salt);\nconst sessionToken = generateToken();\nconst expiresAt = tokenExpires(24);\nconst now = new Date().toISOString();\n\nreturn {\n  json: {\n    _insert: true,\n    username,\n    password_hash: passwordHash,\n    salt,\n    email,\n    interests,\n    schedule_time,\n    active: true,\n    session_token: sessionToken,\n    session_expires_at: expiresAt,\n    gdpr_consent_at: now,\n    created_at: now,\n    success: true,\n    sessionToken,\n    userId: username,\n    error: null\n  }\n};\n"
+        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst input = $input.first().json;\nconst username = (input.username || '').trim();\nconst password = input.password || '';\nconst email = (input.email || '').trim();\nconst interests = (input.interests || '').trim();\nconst schedule_time = (input.schedule_time || '').trim();\n\nif (!isValidUsername(username)) {\n  return { json: { success: false, error: 'Nom d\\'utilisateur invalide.' } };\n}\nif (!isStrongPassword(password)) {\n  return { json: { success: false, error: 'Mot de passe trop faible.' } };\n}\nif (!isValidEmail(email)) {\n  return { json: { success: false, error: 'Email invalide.' } };\n}\n\nconst salt = generateSalt();\nconst passwordHash = hashPassword(password, salt);\nconst sessionToken = generateToken();\nconst expiresAt = tokenExpires(24);\nconst now = new Date().toISOString();\n\nreturn {\n  json: {\n    _insert: true,\n    username,\n    password_hash: passwordHash,\n    salt,\n    email,\n    interests,\n    schedule_time,\n    active: true,\n    session_token: sessionToken,\n    session_expires_at: expiresAt,\n    gdpr_consent_at: now,\n    created_at: now,\n    blocked_sources: '',\n    blocked_topics: '',\n    preferences: '',\n    newsletter_style: 'standard',\n    success: true,\n    sessionToken,\n    userId: username,\n    error: null\n  }\n};\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -132,7 +132,11 @@
             "session_token": "={{ $json.session_token }}",
             "session_expires_at": "={{ $json.session_expires_at }}",
             "gdpr_consent_at": "={{ $json.gdpr_consent_at }}",
-            "created_at": "={{ $json.created_at }}"
+            "created_at": "={{ $json.created_at }}",
+            "blocked_sources": "={{ $json.blocked_sources || '' }}",
+            "blocked_topics": "={{ $json.blocked_topics || '' }}",
+            "preferences": "={{ $json.preferences || '' }}",
+            "newsletter_style": "={{ $json.newsletter_style || 'standard' }}"
           }
         }
       },
@@ -224,7 +228,9 @@
             "node": "Insert User",
             "type": "main",
             "index": 0
-          },
+          }
+        ],
+        [
           {
             "node": "Format Error",
             "type": "main",

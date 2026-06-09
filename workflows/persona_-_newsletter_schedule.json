@@ -1,0 +1,117 @@
+{
+  "name": "Persona - Newsletter Schedule",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours" }]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "nl-sched-trigger-001",
+      "name": "Every Hour"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "PtI435YUermd79xA",
+          "mode": "list",
+          "cachedResultName": "users"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [220, 0],
+      "id": "nl-sched-users-002",
+      "name": "Get All Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst tz = $env.GENERIC_TIMEZONE || 'Europe/Paris';\nconst hour = now.toLocaleString('fr-FR', { timeZone: tz, hour: '2-digit', hour12: false }).padStart(2, '0');\nconst minute = now.toLocaleString('fr-FR', { timeZone: tz, minute: '2-digit' }).padStart(2, '0');\nconst currentTime = `${hour}:${minute}`.replace(/^24:/, '00:');\nconst currentHour = currentTime.slice(0, 2) + ':00';\n\nconst rows = $input.all().map(i => i.json);\nconst due = rows.filter(u => {\n  if (u.active === false) return false;\n  const sched = (u.schedule_time || '08:00').trim();\n  const schedHour = sched.slice(0, 2) + ':00';\n  return schedHour === currentHour;\n});\n\nif (due.length === 0) {\n  return [{ json: { skip: true, message: `Aucun user pour ${currentHour}` } }];\n}\n\nreturn due.map(u => ({ json: { userId: String(u.id), username: u.username, skip: false } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "nl-sched-filter-003",
+      "name": "Filter By Schedule"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [660, 0],
+      "id": "nl-sched-if-004",
+      "name": "Has Users"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Persona - Sub Send Newsletter",
+          "mode": "name"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "userId": "={{ $json.userId }}",
+            "source": "scheduled"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [880, -80],
+      "id": "nl-sched-send-005",
+      "name": "Send Newsletter"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 120],
+      "id": "nl-sched-noop-006",
+      "name": "No Users Due"
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [[{ "node": "Get All Users", "type": "main", "index": 0 }]]
+    },
+    "Get All Users": {
+      "main": [[{ "node": "Filter By Schedule", "type": "main", "index": 0 }]]
+    },
+    "Filter By Schedule": {
+      "main": [[{ "node": "Has Users", "type": "main", "index": 0 }]]
+    },
+    "Has Users": {
+      "main": [
+        [{ "node": "Send Newsletter", "type": "main", "index": 0 }],
+        [{ "node": "No Users Due", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "meta": { "instanceId": "persona-local" },
+  "tags": [{ "name": "persona" }, { "name": "newsletter" }, { "name": "bonus" }]
+}

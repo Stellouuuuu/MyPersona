@@ -10,6 +10,12 @@
             },
             {
               "name": "action"
+            },
+            {
+              "name": "userId"
+            },
+            {
+              "name": "gdprTokenVerified"
             }
           ]
         }
@@ -45,7 +51,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst crypto = require('crypto');\n\nfunction hashPassword(password, salt) {\n  return crypto.createHash('sha256').update(salt + password).digest('hex');\n}\n\nfunction generateSalt() {\n  return crypto.randomBytes(16).toString('hex');\n}\n\nfunction generateToken() {\n  return crypto.randomUUID();\n}\n\nfunction tokenExpires(hours = 24) {\n  return new Date(Date.now() + hours * 3600000).toISOString();\n}\n\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nfunction isValidEmail(email) {\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n}\n\nfunction isValidTime(time) {\n  return /^([01]?\\d|2[0-3]):[0-5]\\d$/.test(time);\n}\n\nfunction isValidUsername(name) {\n  return /^[a-zA-Z0-9_]{3,20}$/.test(name);\n}\n\nfunction isStrongPassword(pwd) {\n  return pwd.length >= 8 && /[A-Za-z]/.test(pwd) && /\\d/.test(pwd);\n}\n\n\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst action = trigger.action;\nconst token = trigger.sessionToken || '';\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => r.session_token === token);\n\nif (!user) {\n  return { json: { success: false, error: 'Utilisateur introuvable.' } };\n}\nif (action !== 'delete' && isExpired(user.session_expires_at)) {\n  return { json: { success: false, error: 'Session expirée.' } };\n}\n\nif (action === 'export') {\n  return {\n    json: {\n      success: true,\n      data: {\n        username: user.username,\n        email: user.email,\n        interests: user.interests,\n        schedule_time: user.schedule_time,\n        active: user.active,\n        created_at: user.created_at,\n        gdpr_consent_at: user.gdpr_consent_at\n      }\n    }\n  };\n}\n\nif (action === 'unsubscribe') {\n  return {\n    json: {\n      _update: true,\n      rowId: user.id,\n      active: false,\n      success: true\n    }\n  };\n}\n\nif (action === 'delete') {\n  return {\n    json: {\n      _delete: true,\n      rowId: user.id,\n      success: true\n    }\n  };\n}\n\nreturn { json: { success: false, error: 'Action RGPD inconnue.' } };\n"
+        "jsCode": "\nfunction isExpired(isoDate) {\n  if (!isoDate) return true;\n  return new Date(isoDate) < new Date();\n}\n\nconst trigger = $('When Executed by Another Workflow').first().json;\nconst action = trigger.action;\nconst token = trigger.sessionToken || '';\nconst rows = $input.all().map(i => i.json);\n\nlet user = null;\nif (trigger.gdprTokenVerified === true && trigger.userId) {\n  user = rows.find(r => r.username === trigger.userId || String(r.id) === String(trigger.userId));\n} else if (token) {\n  user = rows.find(r => r.session_token === token);\n  if (user && action !== 'delete' && isExpired(user.session_expires_at)) {\n    return { json: { success: false, error: 'Session expiree.' } };\n  }\n}\n\nif (!user) {\n  return { json: { success: false, error: 'Utilisateur introuvable.' } };\n}\n\nif (action === 'export') {\n  return {\n    json: {\n      success: true,\n      username: user.username,\n      data: {\n        username: user.username,\n        email: user.email,\n        interests: user.interests,\n        schedule_time: user.schedule_time,\n        active: user.active,\n        blocked_topics: user.blocked_topics || '',\n        blocked_sources: user.blocked_sources || '',\n        preferences: user.preferences || '',\n        created_at: user.created_at,\n        gdpr_consent_at: user.gdpr_consent_at\n      }\n    }\n  };\n}\n\nif (action === 'unsubscribe') {\n  return {\n    json: {\n      _update: true,\n      username: user.username,\n      active: false,\n      username: user.username,\n      success: true\n    }\n  };\n}\n\nif (action === 'delete') {\n  return {\n    json: {\n      _delete: true,\n      username: user.username,\n      username: user.username,\n      success: true\n    }\n  };\n}\n\nreturn { json: { success: false, error: 'Action RGPD inconnue.' } };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -121,9 +127,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "id",
+              "keyName": "username",
               "condition": "eq",
-              "keyValue": "={{ $json.rowId }}"
+              "keyValue": "={{ $json.username }}"
             }
           ]
         },
@@ -158,9 +164,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "id",
+              "keyName": "username",
               "condition": "eq",
-              "keyValue": "={{ $json.rowId }}"
+              "keyValue": "={{ $json.username }}"
             }
           ]
         },

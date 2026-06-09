@@ -42,7 +42,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst token = $('When Executed by Another Workflow').first().json.sessionToken;\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => r.session_token === token);\nif (!user) return { json: { success: true } };\nreturn { json: { _update: true, rowId: user.id, session_token: '', session_expires_at: '' } };\n"
+        "jsCode": "\nconst token = $('When Executed by Another Workflow').first().json.sessionToken;\nconst rows = $input.all().map(i => i.json);\nconst user = rows.find(r => r.session_token === token);\nif (!user) return { json: { success: true } };\nreturn { json: { _update: true, username: user.username, session_token: '', session_expires_at: '' } };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -65,9 +65,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "id",
+              "keyName": "username",
               "condition": "eq",
-              "keyValue": "={{ $json.rowId }}"
+              "keyValue": "={{ $json.username }}"
             }
           ]
         },
